@@ -44,7 +44,7 @@
 
     let username = localStorage.getItem("username") || "";
 
-    const socket = io("http://localhost:5000");
+    const socket = io("https://sustimer-service.onrender.com");
 
     socket.on("connect", () => {
       // If user already set a name previously, auto-join
