@@ -9,17 +9,17 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: "*", // allow all origins (Netlify frontend will connect here)
     methods: ["GET", "POST"]
   }
 });
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
+
+// ❌ Removed: app.use(express.static("public"));
 
 // MongoDB
-// ✅ Use environment variable for security (Render will provide MONGO_URI)
 const mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/chatapp";
 
 mongoose.connect(mongoURI)
