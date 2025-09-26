@@ -17,14 +17,22 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// ❌ Removed: app.use(express.static("public"));
+// ❌ Removed: app.use(express.static("public"))
 
-// MongoDB
-const mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/chatapp";
+// MongoDB (require env var)
+const mongoURI = process.env.MONGO_URI;
 
-mongoose.connect(mongoURI)
+if (!mongoURI) {
+  console.error("❌ No MONGO_URI found. Set it in Render environment variables.");
+  process.exit(1);
+}
+
+mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.log("❌ MongoDB error:", err));
+  .catch(err => {
+    console.error("❌ MongoDB error:", err);
+    process.exit(1);
+  });
 
 const messageSchema = new mongoose.Schema({
   username: String,
