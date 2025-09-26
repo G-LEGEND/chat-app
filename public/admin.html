@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <style>
+    body { display: flex; height: 100vh; background: #f5f7fa; font-family: Arial, sans-serif; margin: 0; }
+    #userList { width: 300px; background: white; border-right: 1px solid #ddd; padding: 20px; box-sizing: border-box; }
+    #users { list-style: none; padding: 0; margin: 0; }
+    #users li { padding: 10px; cursor: pointer; border-radius: 6px; display:flex; justify-content:space-between; align-items: center; }
+    #users li:hover { background: #eee; }
+    .badge { background: #e74c3c; color: white; border-radius: 12px; padding: 2px 8px; font-size: 12px; margin-left: 8px; }
+    #chat { flex: 1; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; }
+    #messages { height: 50vh; background: white; border: 1px solid #ccc; border-radius: 8px; padding: 15px; overflow-y: auto; }
+    .message { padding: 10px; border-radius: 8px; margin-bottom: 10px; max-width: 70%; word-break: break-word; }
+    .admin { background: #d1e7dd; align-self: flex-end; }
+    .user { background: #e8f0fe; align-self: flex-start; }
+    #input { display: flex; gap: 10px; margin-top: 10px; }
+    #message { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #ccc; }
+    .status { font-size: 12px; color: #666; margin-left: auto; margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <div id="userList">
+    <h3>Users</h3>
+    <ul id="users"></ul>
+  </div>
+  <div id="chat">
+    <h3 id="chatTitle">Chat</h3>
+    <div id="messages"></div>
+    <div id="input">
+      <input type="text" id="message" placeholder="Type your message" />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io("http://localhost:5000");
+    let currentUserId = null;
+    let usersCache = {};
+    let notifications = {}; 
+
+    socket.on("connect", () => {
+      socket.emit("join", { username: "Admin", role: "admin" });
+    });
+
+    socket.on("online-users", (users) => {
+      usersCache = users;
+      renderUserList();
+    });
+
+    socket.on("chat-history", (messages) => {
+      const messagesDiv = document.getElementById("messages");
+      messagesDiv.innerHTML = "";
+      if (Array.isArray(messages)) {
+        messages.forEach(addMessage);
+      }
+      if (currentUserId) {
+        notifications[currentUserId] = 0;
+        renderUserList();
+      }
+    });
+
+    socket.on("receive-message", (data) => {
+      if (!data) return;
+      if (data.userId === currentUserId) {
+        addMessage(data);
+      } else {
+        if (!notifications[data.userId]) notifications[data.userId] = 0;
+        notifications[data.userId]++;
+        renderUserList();
+      }
+    });
+
+    function renderUserList() {
+      const ul = document.getElementById("users");
+      ul.innerHTML = "";
+      for (const uid in usersCache) {
+        const info = usersCache[uid];
+        const li = document.createElement("li");
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = info.username;
+
+        const statusSpan = document.createElement("span");
+        statusSpan.className = "status";
+        statusSpan.textContent = info.online ? "online" : "offline";
+
+        li.appendChild(nameSpan);
+        li.appendChild(statusSpan);
+
+        if (notifications[uid] > 0) {
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = notifications[uid];
+          li.appendChild(badge);
+        }
+
+        li.onclick = () => {
+          currentUserId = uid;
+          document.getElementById("chatTitle").innerText = `Chat — ${info.username}`;
+          socket.emit("get-chat-history", { userId: currentUserId });
+        };
+
+        ul.appendChild(li);
+      }
+    }
+
+    function addMessage(data) {
+      const div = document.createElement("div");
+      div.classList.add("message");
+      div.classList.add(data.fromAdmin ? "admin" : "user");
+      div.innerHTML = `<strong>${escapeHtml(data.username)}:</strong> ${escapeHtml(data.message)}`;
+      document.getElementById("messages").appendChild(div);
+      document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
+    }
+
+    function sendMessage() {
+      const message = document.getElementById("message").value.trim();
+      if (!message || !currentUserId) return alert("Select a user and type a message");
+      socket.emit("send-message", {
+        username: "harvestive agent",
+        userId: currentUserId,
+        message,
+        fromAdmin: true
+      });
+      document.getElementById("message").value = "";
+    }
+
+    function escapeHtml(str = "") {
+      const t = document.createElement("div");
+      t.textContent = str;
+      return t.innerHTML;
+    }
+  </script>
+</body>
+</html>

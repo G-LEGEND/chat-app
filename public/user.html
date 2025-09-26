@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>User Chat</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f7fa; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; }
+    h1 { margin-top: 20px; }
+    .setup { margin: 20px 0; display: flex; gap: 10px; align-items: center; }
+    input, button { padding: 10px; font-size: 16px; border-radius: 6px; }
+    button { border: none; background: #4a90e2; color: white; cursor: pointer; }
+    #chat { width: 90%; max-width: 600px; height: 400px; overflow-y: scroll; border: 1px solid #ccc; padding: 15px; background: white; border-radius: 8px; margin-bottom: 15px; display: flex; flex-direction: column; }
+    .message { padding: 10px; margin-bottom: 10px; border-radius: 8px; max-width: 80%; word-wrap: break-word; }
+    .user { background: #e8f0fe; align-self: flex-start; }
+    .admin { background: #d1e7dd; align-self: flex-end; }
+    #inputArea { display: flex; width: 90%; max-width: 600px; gap: 10px; }
+    #message { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>User Chat</h1>
+
+  <div class="setup">
+    <label>Username:</label>
+    <input id="username" placeholder="Enter your name" />
+    <button id="setName">Set Name</button>
+  </div>
+
+  <div id="chat"></div>
+
+  <div id="inputArea">
+    <input id="message" placeholder="Type your message..." disabled />
+    <button id="send" disabled>Send</button>
+  </div>
+
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script>
+    // Use a persistent userId in localStorage. If not present, create one:
+    let userId = localStorage.getItem("userId");
+    if (!userId) {
+      // use crypto.randomUUID when available (modern browsers), fallback otherwise
+      userId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'uid_' + Math.random().toString(36).slice(2);
+      localStorage.setItem("userId", userId);
+    }
+
+    let username = localStorage.getItem("username") || "";
+
+    const socket = io("http://localhost:5000");
+
+    socket.on("connect", () => {
+      // If user already set a name previously, auto-join
+      if (username) {
+        socket.emit("join", { username, role: "user", userId });
+        socket.emit("get-chat-history", { userId });
+        document.getElementById("username").value = username;
+        document.getElementById("username").disabled = true;
+        document.getElementById("setName").disabled = true;
+        document.getElementById("message").disabled = false;
+        document.getElementById("send").disabled = false;
+      }
+    });
+
+    document.getElementById("setName").addEventListener("click", () => {
+      const nameInput = document.getElementById("username").value.trim();
+      if (!nameInput) return alert("Enter a username");
+
+      username = nameInput;
+      localStorage.setItem("username", username);
+      socket.emit("join", { username, role: "user", userId });
+      socket.emit("get-chat-history", { userId });
+
+      document.getElementById("username").disabled = true;
+      document.getElementById("setName").disabled = true;
+      document.getElementById("message").disabled = false;
+      document.getElementById("send").disabled = false;
+    });
+
+    document.getElementById("send").addEventListener("click", () => {
+      const msg = document.getElementById("message").value.trim();
+      if (!msg) return;
+      const messageData = { username, userId, message: msg, fromAdmin: false };
+      socket.emit("send-message", messageData);
+      document.getElementById("message").value = "";
+    });
+
+    // Only display chat-history that belongs to this user (extra safety)
+    socket.on("chat-history", (messages) => {
+      const chat = document.getElementById("chat");
+      chat.innerHTML = "";
+      if (Array.isArray(messages)) {
+        messages
+          .filter(m => m.userId === userId) // safety filter
+          .forEach(addMessage);
+      }
+      chat.scrollTop = chat.scrollHeight;
+    });
+
+    // Only accept receive-message if it is for this user (or it's from admin to this user)
+    socket.on("receive-message", (message) => {
+      if (!message) return;
+      if (message.userId === userId) {
+        addMessage(message);
+      }
+    });
+
+    function addMessage(data) {
+      const chat = document.getElementById("chat");
+      const div = document.createElement("div");
+      div.classList.add("message");
+      div.classList.add(data.fromAdmin ? "admin" : "user");
+      div.innerHTML = `<strong>${escapeHtml(data.username)}:</strong> ${escapeHtml(data.message)}`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function escapeHtml(str = "") {
+      const temp = document.createElement("div");
+      temp.textContent = str;
+      return temp.innerHTML;
+    }
+  </script>
+</body>
+</html>
